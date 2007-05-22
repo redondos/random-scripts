@@ -1,0 +1,21 @@
+#!/bin/bash
+
+cod_area="0261"
+area=$1
+prefijo=$2
+sufijo=$3
+
+if [ -z $prefijo ]; then
+	sufijo=$(echo $area | cut -c 4-7)
+	prefijo=$(echo $area | cut -c 1-3)
+	area=$cod_area
+elif [ -z $sufijo ]; then
+	sufijo=$prefijo
+	prefijo=$area
+	area=$cod_area
+fi
+
+result=$(curl http://www.paginasdoradas.com/BuscarTelefonica.action -d "apellido=&provinciasId=0&localidad.descripcion=&telefono.area=${area}&telefono.prefijo=${prefijo}&telefono.sufijo=${sufijo}" 2>/dev/null|html2text -ascii| sed -n -e '24p' -e '26p' | sed -e 's/^ //g')
+# result=$(curl http://www.paginasdoradas.com/BuscarTelefonica.action -d "apellido=&provinciasId=0&localidad.descripcion=&telefono.area=${area}&telefono.prefijo=${prefijo}&telefono.sufijo=${sufijo}" 2>/dev/null|html2text -ascii| sed -n -e '22,22p' -e '24,24p')
+
+echo $result | iconv -f iso-8859-1 -t utf-8
