@@ -7,7 +7,7 @@ if [ -z $1 ]; then
 fi
 for file in $@
 do
-	TS=`exif "$file" |grep Date|head -n 1|awk -F "|" '{print $2}'`
+	TS=`exif "$file" |grep 'Date.*digi'|head -n 1|awk -F "|" '{print $2}'`
 	if [ -n "$TS" ] ; then 
 	# We have EXIF data.
 		TS_date=$(echo $TS | awk '{print $1}')

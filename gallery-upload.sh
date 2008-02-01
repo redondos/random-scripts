@@ -13,8 +13,9 @@ create an album on the gallery using its name and upload the images there."
 	exit 1
 }
 
+USER=$(whoami)
 upload () {
-	[ $TEST ] ||	galleryadd.pl -G 2 -g http://gallery.redondos.biz -p $password -a $album_id *.jpg | tee $tmpfile
+	[ $TEST ] ||	galleryadd.pl -G 2 -g http://gallery.redondos.biz -u $USER -p $password -a $album_id *.jpg | tee $tmpfile
 	[ $TEST ] ||	egrep "Upload.*OK]" $tmpfile | awk '{print $2}' >> .upload.log
 		cat .upload.log | xargs rm -v 2>/dev/null
 }
