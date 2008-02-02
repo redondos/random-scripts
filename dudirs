@@ -1,0 +1,7 @@
+#!/bin/bash
+if [ $1 == ""]; then
+	depth=1
+else
+	depth=$1
+fi
+du --max-depth=$depth -h
