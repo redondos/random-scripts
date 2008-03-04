@@ -1,0 +1,71 @@
+#/bin/bash
+# smbcp/smbmv - smbclient wrapper
+# Author: Angel Olivera <redondos@gmail.com>
+# Date: 2007-04-13
+# License: GPL
+# Notes: Link/copy/move the script to "smbmv" to move instead of copy.
+
+# The environment variable SMBCP_DEST is the default destination if 
+# it is not specified on the command line. 
+# It can be changed here as well.
+SMBCP_DEST=${SMBCP_DEST:-//localhost/$USER}
+
+function usage() {
+	echo "Usage: $(basename $0) <file(s)> [-U <username>] \
+//host/share[/directory/subdirectory] [password]"
+	# Usage: smbcp <file(s)> [-U <username>] //host/share[/directory/subdirectory] [password]
+	# The only requirement in the order of fields is that destination 
+	# and password are the last two.
+	# Set $DEBUG to see some garbage.
+exit 1;
+}
+
+if [ $# -lt 1 ]; then 
+	usage
+fi
+
+case $0 in
+	*smbmv)	mv=1;;
+esac
+
+while [ $# -gt 0 ]; do
+	[ $DEBUG ] && echo ">> Item: $1"
+	case "$1" in
+	-h|--help)
+		usage;;
+	//*)	dest="$1"
+		pass="$2"
+		[ $DEBUG ] && echo -e "* New destination: $dest\n\
+			* New password: ${pass:-<empty>}"
+		break;;
+	-U)	user=$2
+		shift 2; continue;;
+	*)	files[${#files}]="$1"
+		[ $DEBUG ] && echo -e "* Added $1 to \$files"
+		shift; continue;;
+	esac
+	shift
+done
+
+if [ -z "$pass" ]; then
+	stty -echo
+	read -p "Password: " pass
+	stty echo
+	[ $DEBUG ] && echo
+fi
+
+dest=${dest:-$SMBCP_DEST}
+read host share rest <<< "${dest//\// }"
+host="//$host/$share"
+
+user=${user:-$USER}
+dir="${dest#//*/*/}"
+[ "$dir" == "$dest" ] && dir=""
+
+[ $DEBUG ] && echo -e "* Host: $host\n* Dest: $dir"
+
+for file in "${files[@]}"; do 
+	 [ $DEBUG ] && echo smbclient -c "recurse; put $file" -D "$dir" -U $user "$host" $pass
+	smbclient -c "recurse; put $file" -D "$dir" -U $user "$host" $pass && \
+		[ $mv ] && rm -f "$file" 
+done
