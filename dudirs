@@ -1,11 +1,16 @@
 #!/bin/zsh
 
-depth=${1:-1}
+depth=1
 
-typeset -A s
-
-s=($(du --max-depth=$depth -h . | awk '{print $2, $1}'))
-
-du --max-depth=$depth. | sort -n | while read n d
-	do print $s[$d]$'\t'$d
+while [[ -n $1 ]]; do
+	case $1 in
+	  (-[0-9]*) depth=${1#-} && shift;;
+	esac
 done
+
+du --max-depth=$depth $@ | {
+	while read size dir; do
+		s+=("$size $dir")
+	done
+	print -l ${(On)s[@]}
+}
