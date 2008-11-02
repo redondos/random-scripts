@@ -1,5 +1,15 @@
 #!/bin/zsh
 
+base2()
+{
+	units=(B KB MB GB TB PB EB ZB YB)
+	n=0
+	while (((i = $1.0/2**(10*n)) >= 1024)); do
+		((n++))
+	done
+	printf "%.2f %s\n" $i $units[n+2];
+}
+
 depth=1
 
 while [[ -n $1 ]]; do
@@ -12,5 +22,11 @@ du --max-depth=$depth $@ | {
 	while read size dir; do
 		s+=("$size $dir")
 	done
-	print -l ${(On)s[@]}
+	for item in ${(On)s[@]}; do
+		echo $(base2 ${item%% *}) ${item#* }
+	done
+
 }
+
+# vim: ts=2:sw=2
+
