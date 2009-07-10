@@ -6,27 +6,27 @@
 setopt nonomatch
 prog=$0:t
 
-which exif &>/dev/null || { echo "This program requires exif(1)." && exit 1; }
+which exif &>/dev/null || { print "This program requires exif(1)." && exit 1; }
 usage()
 {
-	echo \
+	print \
 "Usage: $prog [OPTION] EXPRESSION
 Where EXPRESSION is a list of filenames separated by spaces.
   
 Options
   -r          Reverse the operation: remove the timestamp from the file names
   -s shift    Shift timestamp by \`\`shift'' hours
-  "
+  -o          Organize: sort the images nito their own directories named by date
+"
   exit 1
 }
 
-while getopts rs: option; do
+while getopts rs:o option; do
   case $option in
-    s)  shift=$OPTARG
-    ;;
-    r)  op=revert
-    ;;
-    *) usage;;
+    (s) shift=$OPTARG;;
+    (r) op=revert;;
+    (o) op=organize;;
+    (*) usage;;
   esac
 done
 ((OPTIND > 1)) && shift $((OPTIND - 1))
@@ -55,7 +55,7 @@ get_ts()
   # ts=${ts/ /}
 
   if [[ -z $ts ]]; then
-    thumb=$(echo (#i)$f:r.thm)
+    thumb=$(print (#i)$f:r.thm)
     if [[ -e $thumb ]]; then
       ts=$(get_ts $thumb)
     else
@@ -64,22 +64,22 @@ get_ts()
       ts=$ts[1,10]T$ts[12,19]
     fi
   fi
-  echo ${ts//:/}
+  print ${ts//[:-]/}
 }
 
 change_filename()
 {
-  # arg: operation (prepend or append)
-  # arg: filename
-  # arg: string
-  # arg: separator
-  # arg: transformation (optional), can be one of:
-  #       - l: lowercase
-  #       - u: uppercase
-  #       - ln: lowercase just the name (not the extension)
-  #       - un: uppercase just the namey
-  #       - le: lowercase just the extension (not the name)
-  #       - ue: uppercase just the extension
+# arg: operation (prepend or append)
+# arg: filename
+# arg: string
+# arg: separator
+# arg: transformation (optional), can be one of:
+#       - l: lowercase
+#       - u: uppercase
+#       - ln: lowercase just the name (not the extension)
+#       - un: uppercase just the namey
+#       - le: lowercase just the extension (not the name)
+#       - ue: uppercase just the extension
 
   if (($#@<4)); then
     print "# $0:t: insufficient arguments" >&2
@@ -136,7 +136,7 @@ change_filename()
   path=${${${f:h}#.}:+${${f:h}#.}/}
   nf=$path$nf
 
-  echo $nf
+  print $nf
 }
 
 shift_timestamp()
@@ -161,45 +161,58 @@ shift_timestamp()
   TZ=$TZ date --rfc-3339=seconds -d "$ts[1,4]-$ts[5,6]-$ts[7,8] $ts[10,11]:$ts[12,13]:$ts[14,15]-00:00"
 }
 
-process_file()
+timestamp_file()
 {
 # arg: file
 
-  local f=$1
+  local f=$1 ts ts_exif
 
-  ((pass!=2)) && print $'\n# processing: '"$f" >&2
+  print $'\n# processing: '"$f" >&2
   ts=$(get_ts $f)
-  [[ -z $ts ]] && continue
+  [[ -z $ts ]] && return
 
-  if [[ -n $shift ]] && ((pass!=2)); then
+  if [[ -n $shift ]]; then
     ts=$(shift_timestamp $ts $shift)
-    ts="$ts[1,4]:$ts[6,7]:$ts[9,10] $ts[12,13]:$ts[15,16]:$ts[18,19]"
-    exif -t 'Date and Time' --set-value $ts --ifd=0 -o $f $f | grep -v 'Wrote file'
-    print "# changed EXIF timestamp to $ts" >&2
-    pass=2
-    process_file $f
-    return 0
+    ts_exif="$ts[1,4]:$ts[6,7]:$ts[9,10] $ts[12,13]:$ts[15,16]:$ts[18,19]"
+    print exif -t \'Date and Time\' --set-value \"$ts_exif\" --ifd=0 -o \"$f\" \"$f\" '>/dev/null'
+    ts=$ts[1,4]$ts[6,7]$ts[9,10]T$ts[12,13]$ts[15,16]$ts[18,19]
   fi
 
-  unset pass
   nf=$(change_filename prepend $f $ts - le)
-  [[ -z $nf ]] && continue
+  [[ -z $nf ]] && return
 
-  echo mv -v \"$f\" \"$nf\"
-  echo touch -acmt $ts[3,8]$ts[10,13] \"$nf\"
+  print mv -v \"$f\" \"$nf\"
+  print touch -acmt $ts[3,8]$ts[10,13] \"$nf\"
+}
+
+organize()
+{
+# arg: file
+  local f=$1 ts dest
+
+  ts=$(get_ts $f)
+  [[ -z $ts ]] && return
+
+  dst="$f:h/$ts[1,4]-$ts[5,6]-$ts[7,8]"
+  print mkdir -p \"$dst\"
+  print mv -v \"$f\" \"$dst\"
+
 }
 
 for f in $@; do
   case $op in
     (revert)
-      n=${${f:r:t}##*-}
-      echo mv -v \"$f\" \"$f:h/$n\"
+      n=${${f:t}##*-}
+      print mv -v \"$f\" \"$f:h/$n\"
+    ;;
+    (organize)
+      organize $f
     ;;
     (*)
-      process_file $f
+      timestamp_file $f
     ;;
   esac
 done
 
-if [ -n "$1" ]; then echo "# This is a preview only. Run with $0:t|sh to apply the changes."; fi
+if [ -n "$1" ]; then print "# This is a preview only. Run with $0:t|sh to apply the changes."; fi
 
