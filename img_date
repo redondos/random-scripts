@@ -1,0 +1,205 @@
+#!/bin/zsh
+
+# TODO:
+# implement time shifting
+
+setopt nonomatch
+prog=$0:t
+
+which exif &>/dev/null || { echo "This program requires exif(1)." && exit 1; }
+usage()
+{
+	echo \
+"Usage: $prog [OPTION] EXPRESSION
+Where EXPRESSION is a list of filenames separated by spaces.
+  
+Options
+  -r          Reverse the operation: remove the timestamp from the file names
+  -s shift    Shift timestamp by \`\`shift'' hours
+  "
+  exit 1
+}
+
+while getopts rs: option; do
+  case $option in
+    s)  shift=$OPTARG
+    ;;
+    r)  op=revert
+    ;;
+    *) usage;;
+  esac
+done
+((OPTIND > 1)) && shift $((OPTIND - 1))
+
+if [[ -z $1 ]]; then
+  usage
+fi
+
+get_ts()
+{
+# arg: file
+# output: timestamp: YYYY-MM-DDTHH-MM-SS
+
+  local ts thumb
+
+  if [[ ! -f $1 ]]; then
+    print "# $prog:t: $1: No such file or directory" >&2
+    return
+  fi
+
+  # from exif
+  ts=$(exif $1 2>/dev/null | awk '/Date and Time *\|/{sub(/\|/, ""); print $4 "T" $5}')
+  # print "$0: TS:**  $ts  **"
+
+  # ts=$(exif -t 'Date and Time' -m $1)
+  # ts=${ts/ /}
+
+  if [[ -z $ts ]]; then
+    thumb=$(echo (#i)$f:r.thm)
+    if [[ -e $thumb ]]; then
+      ts=$(get_ts $thumb)
+    else
+      # from inode
+      ts=$(stat --format="%y" $1 2>/dev/null)
+      ts=$ts[1,10]T$ts[12,19]
+    fi
+  fi
+  echo ${ts//:/}
+}
+
+change_filename()
+{
+  # arg: operation (prepend or append)
+  # arg: filename
+  # arg: string
+  # arg: separator
+  # arg: transformation (optional), can be one of:
+  #       - l: lowercase
+  #       - u: uppercase
+  #       - ln: lowercase just the name (not the extension)
+  #       - un: uppercase just the namey
+  #       - le: lowercase just the extension (not the name)
+  #       - ue: uppercase just the extension
+
+  if (($#@<4)); then
+    print "# $0:t: insufficient arguments" >&2
+    return
+  fi
+
+  local op=$1 f=$2 string=$3 nf sep=$4 transform=$5
+
+  if [[ ! -f $f ]]; then
+    print "# $0:t: $1: No such file or directory" >&2
+    return
+  fi
+
+  case $op in
+    (prepend)
+      nf=${string}${sep}${f:t:r}
+    ;;
+    (append)
+      nf=${f:t:r}${sep}${string}
+    ;;
+    (*)
+      print "# $0:t: $1: Unsupported operation. Valid operations are: prepend, append." >&2
+      return
+    ;;
+  esac
+
+  case $transform in
+    (l)
+      nf=${(L)nf}.${(L)f:e}
+    ;;
+    (u)
+      nf=${(U)nf}.${(U)f:e}
+    ;;
+    (ln)
+      nf=${(L)nf}.${f:e}
+    ;;
+    (un)
+      nf=${(U)nf}.${f:e}
+    ;;
+    (le)
+      nf=${nf}.${(L)f:e}
+    ;;
+    (ue)
+      nf=${nf}.${(U)f:e}
+    ;;
+    (*)
+      print "# $0:t: $1: Unsupported transformation. Valid transformations are: l, u, ln, un, le, ue." >&2
+      return
+    ;;
+  esac
+
+  # very messy way of printing the path if the file is not in the current
+  # directory, but couldn't find a cleaner, shorter one
+  path=${${${f:h}#.}:+${${f:h}#.}/}
+  nf=$path$nf
+
+  echo $nf
+}
+
+shift_timestamp()
+{
+# arg: timestamp in format: %Y%m%d--%H%M%S
+# arg: shift (positive/negative integer)
+
+  if (($#@!=2)); then
+    print "# $0:t: insufficient arguments" >&2
+  fi
+
+  local ts=$1 shift=$2
+
+  # TZ=UTC date --rfc-3339=seconds -d '2005-07-10 11:38:44-00:00' 
+  # TZ=UTC date --rfc-3339=seconds -d "$ts[1,4]-$ts[5,6]-$ts[7,8] $ts[10,11]:$ts[12,13]:$ts[14,15]-00:00"
+  if ((shift>0)); then
+    TZ=UTC-$((shift))
+  else
+    TZ=UTC+$((-shift))
+  fi
+
+  TZ=$TZ date --rfc-3339=seconds -d "$ts[1,4]-$ts[5,6]-$ts[7,8] $ts[10,11]:$ts[12,13]:$ts[14,15]-00:00"
+}
+
+process_file()
+{
+# arg: file
+
+  local f=$1
+
+  ((pass!=2)) && print $'\n# processing: '"$f" >&2
+  ts=$(get_ts $f)
+  [[ -z $ts ]] && continue
+
+  if [[ -n $shift ]] && ((pass!=2)); then
+    ts=$(shift_timestamp $ts $shift)
+    ts="$ts[1,4]:$ts[6,7]:$ts[9,10] $ts[12,13]:$ts[15,16]:$ts[18,19]"
+    exif -t 'Date and Time' --set-value $ts --ifd=0 -o $f $f | grep -v 'Wrote file'
+    print "# changed EXIF timestamp to $ts" >&2
+    pass=2
+    process_file $f
+    return 0
+  fi
+
+  unset pass
+  nf=$(change_filename prepend $f $ts - le)
+  [[ -z $nf ]] && continue
+
+  echo mv -v \"$f\" \"$nf\"
+  echo touch -acmt $ts[3,8]$ts[10,13] \"$nf\"
+}
+
+for f in $@; do
+  case $op in
+    (revert)
+      n=${${f:r:t}##*-}
+      echo mv -v \"$f\" \"$f:h/$n\"
+    ;;
+    (*)
+      process_file $f
+    ;;
+  esac
+done
+
+if [ -n "$1" ]; then echo "# This is a preview only. Run with $0:t|sh to apply the changes."; fi
+
