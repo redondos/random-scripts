@@ -1,0 +1,18 @@
+#!/bin/bash
+# jerbear, based on convert-base2.awk
+ 
+function size_format
+{
+        local size=$1
+ 
+        local prefix=(B K M G T P E Z Y)
+        local n=0
+        local i=
+        while true; do
+                i=$((size/2**(10*n)))
+                (( i < 1024 )) && break
+                ((n++))
+        done
+ 
+        echo "${i}${prefix[$n]}"
+}

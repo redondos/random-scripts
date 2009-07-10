@@ -1,0 +1,67 @@
+#!/bin/bash
+
+DATE=$(which date)
+SEP=" | "
+
+cpu_usage() {
+
+echo "DEBUG: ${stat_old[@]}"
+	#zsh
+	# < /proc/stat \
+	# read	_ stat[user] stat[nice] stat[system] stat[idle] stat[iowait]	\
+	#	stat[irq] stat[softirq] _
+	# s+="[$((stat[idle]-stat_old[idle]))]"
+	# stat_old=$stat
+
+	#bash
+	local stat_old
+	stat_old=($(echo "$1"))
+  # key: cpu user nice system idle iowait irq softirq 0
+  stat=($(read line < /proc/stat; echo "$line"))                                     
+	(( usage = (stat[1]-stat_old[1]) + (stat[2]-stat_old[2]) + (stat[3]-stat_old[3]) ))
+	(( idle = stat[4]-stat_old[4] ))
+  stat_old=("${stat[@]}")
+  [[ ${stat_old[4]} ]] && echo "${stat_old[@]} $(( 100*usage/(total+idle) ))"
+}
+
+load_average() {
+	# key: 1 5 15 running highest_pid
+  loadavg=($(read line < /proc/loadavg; echo "$line"))
+	[[ $s ]] && echo "${loadavg[0]} ${loadavg[1]} ${loadavg[2]}"
+}
+
+shopt -s nullglob	# for inbox()
+inbox() {
+	mail=(~/.maildir/new/*)
+	echo  "inbox: ${#mails}"
+}
+
+date() {
+	echo "$("$DATE" "+%a %d-%m-%y %H:%M:%S")"
+}
+	
+while sleep 0.5; do
+	s=
+	## CPU usage
+	arg=${stat[*]}
+	stat=($(cpu_usage "$arg"))
+echo "DEBUG: ${stat[@]}"
+	s+="cpu: ${stat[9]}%       |"
+
+
+	## Load average
+	s+=$(load_average)
+
+	## Inbox
+	s+=$SEP
+	s+=$(inbox)
+
+	## Date
+	s+=$SEP
+	s+=$(date)
+	
+	echo "$s"
+
+done
+
+# vim: ts=2
