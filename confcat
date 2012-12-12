@@ -1,0 +1,8 @@
+#!/bin/bash 
+# Code to cat a config file removing all comments and blank lines. 
+  
+# grep -vh '^#' "$@" | grep -v '^$'
+#egrep -vh '^[#$;].*|^[ \t]*[#$;].*' "$@"
+# grep -v '^[[:space:]]*[#!;]' $@ | sed '/^[[:blank:]]*$/d'
+sed '/^\s*\([#;"].*\)\?$/d' "$@" | grep -v '<!-- .* -->'
+# sed '/^\s*[#;"]\?/d' "$@"
