@@ -1,4 +1,7 @@
 #!/bin/zsh
+# Angel Olivera <aolivera@gmail.com>
+# 2009
+# License: GPL-2
 
 # TODO:
 # implement time shifting

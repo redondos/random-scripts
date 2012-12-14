@@ -1,4 +1,8 @@
 #!/bin/bash
+# Angel Olivera <aolivera@gmail.com>
+# sometime around 2006-7
+# GPL-2 or later
+
 PN=`basename "$0"`
 VER='0.1'
 Usage () {
