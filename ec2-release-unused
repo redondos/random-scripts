@@ -1,0 +1,64 @@
+#!/usr/bin/env python
+# disassociate and release AWS ec2/vpc elastic ips
+# 2013 Angelo Olivera <aolivera@gmail.com>
+
+import sys, os
+from boto.ec2 import EC2Connection
+
+def find_disassociated_ip(connection):
+    for ip in connection.get_all_addresses():
+        if not ip.association_id:
+            return ip
+
+def find_stopped_ip(connection):
+    for ip in connection.get_all_addresses():
+        reservation = connection.get_all_instances([ip.instance_id])
+        state = reservation[0].instances[0].state
+        if state == "stopped" or state == "stopping" or state == "terminated":
+            return ip
+
+def release_ip(c, ip):
+        if ip.allocation_id:
+            if ip.association_id:
+                if c.disassociate_address(None, ip.association_id):
+                    print "Disassociated VPC IP:", ip.public_ip
+            if ip.allocation_id:
+                if c.release_address(None, ip.allocation_id):
+                    print "Released VPC IP:", ip.public_ip
+                    return True
+        else:
+            if ip.association_id:
+                if c.disassociate_address(ip.public_ip):
+                    print "Disassociated EC2 IP:", ip.public_ip
+            if c.release_address(ip.public_ip):
+                print "Released EC2 IP:", ip.public_ip
+                return True
+        return False
+
+def main():
+    # Create connection with AWS
+    try:
+        c = EC2Connection(os.environ['AWS_ACCESS_KEY'], os.environ['AWS_SECRET_KEY'])
+    except:
+        print "Could not find AWS credentials. Please set environment variables AWS_ACCESS_KEY and AWS_SECRET_KEY."
+        sys.exit(1)
+
+    while True:
+        ip = find_disassociated_ip(c)
+        if not ip: break
+        release_ip(c, ip)
+
+    if len(sys.argv) < 2: sys.exit(0)
+
+    # -a releases associated ips for machines that are stopped or terminated
+    if sys.argv[1] == "-a":
+        while True:
+            ip = find_stopped_ip(c)
+            if not ip: break
+            try:
+                release_ip(c, ip)
+            except:
+                None
+
+if __name__ == "__main__":
+    main()
